@@ -1,0 +1,60 @@
+name: OneCloud OpenWRT Docker Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      OP_rootfs:
+        description: 'RootFS 分区大小 (MB)'
+        required: false
+        default: '512'
+      OP_author:
+        description: '编译者名称'
+        required: false
+        default: 'GitHub Actions'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: openwrt
+
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🧹 Clean old release folder
+        run: |
+          rm -rf release/openwrt || true
+          mkdir -p release/openwrt
+
+      - name: ⚙️ Prepare environment
+        run: |
+          sed -i 's/\r$//' docker-build.sh build.sh || true
+          chmod +x docker-build.sh build.sh
+          mkdir -p bin files
+          sudo chmod -R 777 bin files
+
+      - name: 📦 Pull OpenWRT ImageBuilder
+        run: docker pull openwrt/imagebuilder:armsr-armv7-master
+
+      - name: 🏗️ Build firmware
+        env:
+          OP_rootfs: ${{ github.event.inputs.OP_rootfs }}
+          OP_author: ${{ github.event.inputs.OP_author }}
+        run: ./docker-build.sh
+
+      - name: 📁 Package OpenWRT firmware
+        run: |
+          mkdir -p release/openwrt
+          cp -r bin/* release/openwrt/ || true
+          echo "✅ release/openwrt/ 目录内容如下："
+          ls -R release/openwrt || true
+
+      - name: 📤 Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-images
+          path: openwrt/bin/
+          if-no-files-found: warn
+          compression-level: 6
