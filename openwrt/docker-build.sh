@@ -7,5 +7,4 @@ docker run --rm \
   -v "$(pwd)/bin:/builder/bin" \
   -v "$(pwd)/files:/builder/files" \
   -v "$(pwd)/build.sh:/builder/build.sh" \
-  openwrt/imagebuilder:armsr-armv7-master /builder/build.sh
-
+  openwrt/imagebuilder:armsr-armv7-master bash -c "cd /home/build/openwrt && /builder/build.sh"
