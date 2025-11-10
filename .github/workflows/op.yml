@@ -1,9 +1,9 @@
 name: OpenWRT 自动构建
 
 on:
-  workflow_dispatch:        # 手动触发
-  schedule:                 # 定时触发（每天早上 4 点）
-    - cron: '0 20 * * *'    # 注意：UTC 时间，等于北京时间早上 4 点
+  workflow_dispatch:
+  schedule:
+    - cron: '0 20 * * *'
 
 jobs:
   build:
@@ -13,17 +13,19 @@ jobs:
       - name: 🧰 检出仓库代码
         uses: actions/checkout@v4
 
-      - name: 🕹️ 设置执行权限
+      - name: 🔧 修正脚本权限与换行符
         run: |
-          chmod +x openwrt/build.sh
-          chmod +x openwrt/docker-build.sh
+          sudo apt-get update
+          sudo apt-get install -y dos2unix
+          dos2unix openwrt/*.sh
+          chmod +x openwrt/*.sh
 
       - name: 🧱 执行构建脚本
         working-directory: ./openwrt
         env:
           OP_author: ${{ github.actor }}
           OP_rootfs: 512
-        run: ./docker-build.sh
+        run: bash ./docker-build.sh
 
       - name: 📦 上传构建产物
         uses: actions/upload-artifact@v4
@@ -31,13 +33,13 @@ jobs:
           name: thunder-onecloud-rootfs
           path: openwrt/release/openwrt/thunder-onecloud-custom-rootfs.tar.gz
 
-      - name: 🚀 自动发布 Release（可选）
+      - name: 🚀 发布 Release（手动触发时）
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "build-${{ github.run_number }}"
           name: "OpenWRT 自动构建 #${{ github.run_number }}"
-          body: "这是通过 GitHub Actions 自动构建并打包的 rootfs 固件。"
+          body: "这是自动构建并打包的 rootfs 固件。"
           files: |
             openwrt/release/openwrt/thunder-onecloud-custom-rootfs.tar.gz
         env:
