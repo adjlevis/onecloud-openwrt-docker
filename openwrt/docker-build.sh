@@ -13,7 +13,7 @@ docker run --rm \
   -v "$(pwd)/bin:/builder/bin" \
   -v "$(pwd)/files:/builder/files" \
   -v "$(pwd)/build.sh:/builder/build.sh" \
-  openwrt/imagebuilder:armsr-armv7-master bash -eux -c '
+  openwrt/imagebuilder:armsr-armv7 bash -eux -c '
 
 # 候选路径优先检查（快速）
 CANDIDATES="/home/build/openwrt /home/build /opt/openwrt /openwrt /openwrt-imagebuilder /workdir /"
@@ -52,3 +52,4 @@ chmod +x ./build.sh
 # 我们直接运行 build.sh；若需要可改为: FILES=/builder/files ./build.sh
 ./build.sh
 '
+
