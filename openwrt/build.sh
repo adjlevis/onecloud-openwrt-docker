@@ -1,22 +1,31 @@
 #!/bin/bash
 set -e
 
+# ============================================================
+# 🧩 基本配置
+# ============================================================
 ROOTFS_URL="https://dl.openwrt.ai/releases/targets/amlogic/meson8b/kwrt-10.30.2025-amlogic-meson8b-thunder-onecloud-rootfs.tar.gz"
 OUTPUT_DIR="release/openwrt"
 WORK_DIR="$(pwd)"
 
-echo "📥 下载预构建 rootfs..."
+echo "📥 开始下载预构建 rootfs..."
 mkdir -p bin/rootfs files "$OUTPUT_DIR"
 
 cd bin/rootfs
 curl -LO "$ROOTFS_URL"
 cd "$WORK_DIR"
 
-echo "✅ rootfs 下载完成"
+echo "✅ rootfs 下载完成。"
 
-echo "📂 解压 rootfs..."
+# ============================================================
+# 📦 解压 rootfs
+# ============================================================
+echo "📂 解压 rootfs 到 files/..."
 tar -xzf bin/rootfs/*.tar.gz -C files/ || true
 
+# ============================================================
+# ⚙️ 写入旁路由网络配置
+# ============================================================
 echo "🧰 写入旁路由网络配置..."
 mkdir -p files/etc/config
 
@@ -36,9 +45,39 @@ DHCP
 
 echo "✅ 已配置为旁路由 (IP=192.168.2.2, 网关=192.168.2.1, DHCP=关闭)"
 
-# ==============================
-# 🔧 制作 EXT4 镜像（线刷用）
-# ==============================
+# ============================================================
+# 🌐 添加 OpenClash 插件 需要增加插件可以在此再写代码即可
+# ============================================================
+echo "🌐 下载并集成 OpenClash 插件..."
+mkdir -p files/tmp/openclash
+git clone --depth=1 https://github.com/vernesong/OpenClash.git tmp_openclash
+cp -rf tmp_openclash/luci-app-openclash/files/* files/ || true
+rm -rf tmp_openclash
+echo "✅ OpenClash 已添加完成。"
+
+# ============================================================
+# 🎨 替换默认主题为 Argon
+# ============================================================
+echo "🎨 下载 luci-theme-argon 主题..."
+git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git tmp_argon
+cp -rf tmp_argon/files/* files/ || true
+rm -rf tmp_argon
+
+echo "⚙️ 修改默认主题为 Argon..."
+mkdir -p files/etc/config
+cat <<'UCI' > files/etc/config/luci
+config core main
+	option lang auto
+	option mediaurlbase '/luci-static/argon'
+	option resourcebase '/luci-static/resources'
+	option ubuspath '/ubus/'
+UCI
+
+echo "✅ 默认主题已设置为 luci-theme-argon。"
+
+# ============================================================
+# 🧱 制作 EXT4 镜像（EMMC 线刷包）
+# ============================================================
 IMG_FILE="${OUTPUT_DIR}/thunder-onecloud-emmc-ext4.img"
 MNT_DIR="./mnt_ext4"
 
@@ -60,7 +99,11 @@ sudo rm -rf "$MNT_DIR"
 
 echo "✅ EXT4 镜像制作完成: $IMG_FILE"
 
-# 可选：压缩镜像节省空间
+# ============================================================
+# 📦 压缩镜像
+# ============================================================
 echo "📦 压缩镜像..."
 gzip -f "$IMG_FILE"
 echo "✅ 输出文件: ${IMG_FILE}.gz"
+
+echo "🎉 构建流程全部完成！"
