@@ -1,16 +1,11 @@
-name: N1 OpenWRT RootFS Custom Build
+name: OneCloud OpenWRT Build
 
 on:
+  # 手动触发
   workflow_dispatch:
-    inputs:
-      OP_author:
-        description: "编译者名称"
-        required: false
-        default: "GitHub Actions"
-
+  # 每 15 天自动触发（北京时间凌晨 3 点）
   schedule:
-    # 每 15 天执行一次（UTC 时间）。这是北京时间凌晨 03:00。
-    - cron: "0 19 */15 * *"
+    - cron: "0 19 */15 * *"  # UTC+0 = 北京时间 +8 小时
 
 permissions:
   contents: write
@@ -18,7 +13,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
@@ -27,76 +21,56 @@ jobs:
       - name: Prepare directories
         run: |
           mkdir -p openwrt/bin openwrt/files release/openwrt
-          chmod -R 777 openwrt/bin openwrt/files release/openwrt || true
 
-      - name: Download prebuilt rootfs
+      - name: Download OpenWRT rootfs
         run: |
-          set -e
           ROOTFS_URL="https://dl.openwrt.ai/releases/targets/amlogic/meson8b/kwrt-10.30.2025-amlogic-meson8b-thunder-onecloud-rootfs.tar.gz"
           mkdir -p openwrt/bin/rootfs
           curl -fsSL "$ROOTFS_URL" -o openwrt/bin/rootfs/rootfs.tar.gz
-          ls -lh openwrt/bin/rootfs
 
-      - name: Extract rootfs and apply configs
+      - name: Extract and modify config
         run: |
-          set -e
-          mkdir -p openwrt/files
           tar -xzf openwrt/bin/rootfs/rootfs.tar.gz -C openwrt/files || true
-
           mkdir -p openwrt/files/etc/config
-
-          cat > openwrt/files/etc/config/network <<'NETCONF'
+          cat > openwrt/files/etc/config/network <<'EOF'
 config interface 'lan'
   option proto 'static'
   option ipaddr '192.168.2.2'
   option netmask '255.255.255.0'
   option gateway '192.168.2.1'
   option dns '192.168.2.1'
-NETCONF
-
-          cat > openwrt/files/etc/config/dhcp <<'DHCP'
+EOF
+          cat > openwrt/files/etc/config/dhcp <<'EOF'
 config dhcp 'lan'
   option ignore '1'
-DHCP
+EOF
 
-      - name: Package customized firmware
+      - name: Package firmware
         run: |
-          set -e
           mkdir -p release/openwrt
-          tar -czf release/openwrt/thunder-onecloud-custom-rootfs.tar.gz -C openwrt/files .
-          ls -lh release/openwrt
+          tar -czf release/openwrt/thunder-onecloud-rootfs-custom.tar.gz -C openwrt/files .
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: thunder-onecloud-rootfs-custom
-          path: release/openwrt/
-          if-no-files-found: warn
-          compression-level: 6
-
-      - name: Get Beijing Time
+      - name: Get current time
         id: time
         run: |
           export TZ=Asia/Shanghai
-          echo "datetime=$(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
           echo "tag=$(date '+%Y.%m.%d')" >> $GITHUB_OUTPUT
+          echo "time=$(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
 
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
-        if: always()
         with:
-          tag_name: "OneCloud-OpenWRT-${{ steps.time.outputs.tag }}"
-          name: "OneCloud OpenWRT 旁路由固件 ${{ steps.time.outputs.tag }}"
+          tag_name: "OneCloud-${{ steps.time.outputs.tag }}"
+          name: "OneCloud OpenWRT ${{ steps.time.outputs.tag }}"
           body: |
-            玩客云 OneCloud OpenWRT 固件构建完成！
+            ✅ 玩客云 OneCloud OpenWRT 固件构建完成
             - 平台: amlogic/meson8b
-            - 基于: openwrt.ai 24.10.4
-            - 构建者: ${{ github.event.inputs.OP_author }}
-            - 构建时间（北京时间）: ${{ steps.time.outputs.datetime }}
+            - 内核: 6.6.110
+            - 版本: openwrt.ai 24.10.4
+            - 时间（北京时间）: ${{ steps.time.outputs.time }}
 
-            包含文件：
-            - thunder-onecloud-custom-rootfs.tar.gz
-          files: release/openwrt/**/*
-          overwrite_files: true
+            固件文件：
+            thunder-onecloud-rootfs-custom.tar.gz
+          files: release/openwrt/thunder-onecloud-rootfs-custom.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
