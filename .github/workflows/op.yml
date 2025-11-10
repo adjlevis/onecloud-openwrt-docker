@@ -1,74 +1,75 @@
-name: OneCloud OpenWRT Build
+name: OneCloud OpenWRT 自动构建线刷镜像
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '0 20 * * *'  # 每天北京时间早上4点
 
 jobs:
   build:
-    name: 🔧 构建并发布 OneCloud OpenWRT
     runs-on: ubuntu-latest
 
     steps:
-      # ============================================================
-      # 📦 1. 检出仓库代码
-      # ============================================================
-      - name: 🧱 检出代码
+      - name: 🧰 检出仓库代码
         uses: actions/checkout@v4
 
-      # ============================================================
-      # 🧰 2. 安装依赖
-      # ============================================================
-      - name: 🧰 设置构建环境
+      - name: 🔧 修正权限与换行符
         run: |
-          sudo apt update
-          sudo apt install -y curl rsync git e2fsprogs dosfstools gzip tar
+          sudo apt-get update
+          sudo apt-get install -y dos2unix
+          # 转换并赋权
+          for f in ./openwrt/*.sh; do
+            [ -f "$f" ] && dos2unix "$f" && chmod +x "$f"
+          done
 
-      # ============================================================
-      # 🚀 3. 执行构建脚本
-      # ============================================================
-      - name: 🚀 运行 docker-build.sh
+      - name: 🧱 执行构建脚本
         working-directory: ./openwrt
         env:
-          OP_author: ${{ github.actor }}
+          OP_author: adjlevis
           OP_rootfs: 512
         run: |
-          chmod +x build.sh docker-build.sh
+          set -e
+          echo "开始执行 docker-build.sh..."
           ./docker-build.sh
+          echo "构建完成 ✅"
 
-      # ============================================================
-      # 📤 4. 发布构建产物（自动带发布说明）
-      # ============================================================
-      - name: 📤 发布构建结果
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: latest
-          name: "OneCloud OpenWRT 线刷包"
-          files: |
-            release/openwrt/*.gz
-          body_path: release/openwrt/release_note.md  # ✅ 自动附带说明
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ============================================================
-      # 🧹 5. 清理旧版，仅保留最新
-      # ============================================================
-      - name: 🧹 清理旧版本，仅保留最新
-        uses: dev-drprasad/delete-older-releases@v0.3.3
-        with:
-          keep_latest: 1
-          delete_tags: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ============================================================
-      # ✅ 6. 输出完成信息
-      # ============================================================
-      - name: ✅ 输出构建信息
+      - name: 📝 生成更新日志
+        id: changelog
         run: |
-          echo "🎉 构建并发布完成！"
-          echo "📦 输出文件位于 release/openwrt/"
+          echo "🧾 生成更新日志..."
+          # 找到上一个 "latest" 标签（如果存在）
+          LAST_TAG=$(git tag -l latest)
+          if [ -n "$LAST_TAG" ]; then
+            echo "检测到旧版本，生成变更列表..."
+            git log ${LAST_TAG}..HEAD --pretty=format:"- %s" > changelog.txt
+          else
+            echo "首次构建，显示最近 10 次提交"
+            git log -n 10 --pretty=format:"- %s" > changelog.txt
+          fi
+
+          echo "------------------------"
+          cat changelog.txt
+          echo "------------------------"
+
+          # 将 changelog 内容写入 GitHub Actions 输出
+          CHANGELOG=$(cat changelog.txt)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: 📦 发布 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "latest"
+          name: "OneCloud OpenWRT 线刷包"
+          body: |
+            🔄 自动构建时间：${{ github.run_started_at }}
+            ✅ 固件类型：EMMC 线刷镜像（EXT4）
+            ⚙️ 仅保留最新构建版本
+
+            🆕 本次更新内容：
+            ${{ steps.changelog.outputs.changelog }}
+          files: |
+            openwrt/release/thunder-onecloud-emmc-ext4.img.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
