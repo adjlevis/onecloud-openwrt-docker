@@ -1,40 +1,63 @@
-name: OneCloud OpenWRT 自动构建线刷镜像
+name: Build OpenWRT OneCloud
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 20 * * *'  # 每天北京时间早上4点
+  push:
+    branches:
+      - main
 
 jobs:
   build:
+    name: 🔧 构建并发布 OneCloud OpenWRT
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🧰 检出仓库代码
+      # ============================================================
+      # 📦 1. 检出仓库代码
+      # ============================================================
+      - name: 🧱 检出代码
         uses: actions/checkout@v4
 
-      - name: 🔧 修正权限与换行符
+      # ============================================================
+      # 🧰 2. 安装依赖
+      # ============================================================
+      - name: 🧰 设置构建环境
         run: |
-          sudo apt-get update
-          sudo apt-get install -y dos2unix
-          dos2unix openwrt/*.sh
-          chmod +x openwrt/*.sh
+          sudo apt update
+          sudo apt install -y curl rsync git e2fsprogs dosfstools gzip tar
 
-      - name: 🧱 执行构建脚本
+      # ============================================================
+      # 🚀 3. 执行构建脚本
+      # ============================================================
+      - name: 🚀 运行 docker-build.sh
         working-directory: ./openwrt
         env:
           OP_author: ${{ github.actor }}
           OP_rootfs: 512
-        run: bash ./docker-build.sh
+        run: |
+          chmod +x build.sh docker-build.sh
+          ./docker-build.sh
 
-      - name: 📦 上传 EMMC 线刷镜像
-        uses: actions/upload-artifact@v4
+      # ============================================================
+      # 📤 4. 发布构建产物（自动带发布说明）
+      # ============================================================
+      - name: 📤 发布构建结果
+        uses: softprops/action-gh-release@v1
         with:
-          name: thunder-onecloud-emmc-ext4-img
-          path: openwrt/release/openwrt/thunder-onecloud-emmc-ext4.img.gz
+          tag_name: latest
+          name: "OneCloud OpenWRT 线刷包"
+          files: |
+            release/openwrt/*.gz
+          body_path: release/openwrt/release_note.md  # ✅ 自动附带说明
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 🧹 删除旧的 Release 和 Tag，保持最新版本
-      - name: 🧹 清理旧的 Releases（仅保留最新1个）
+      # ============================================================
+      # 🧹 5. 清理旧版，仅保留最新
+      # ============================================================
+      - name: 🧹 清理旧版本，仅保留最新
         uses: dev-drprasad/delete-older-releases@v0.3.3
         with:
           keep_latest: 1
@@ -42,16 +65,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 🚀 发布最新线刷镜像
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "latest"
-          name: "OneCloud OpenWRT 线刷包"
-          body: |
-            🔄 自动构建时间：${{ github.run_started_at }}
-            ✅ 固件类型：EMMC 线刷镜像（EXT4）
-            ⚙️ 仅保留最新构建版本
-          files: |
-            openwrt/release/openwrt/thunder-onecloud-emmc-ext4.img.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # ============================================================
+      # ✅ 6. 输出完成信息
+      # ============================================================
+      - name: ✅ 输出构建信息
+        run: |
+          echo "🎉 构建并发布完成！"
+          echo "📦 输出文件位于 release/openwrt/"
