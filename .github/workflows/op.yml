@@ -1,12 +1,28 @@
-name: Onecloud OpenWRT RootFS Custom Build
+name: N1 OpenWRT RootFS Custom Build
 
 on:
+  # ✅ 手动触发
   workflow_dispatch:
     inputs:
       OP_author:
         description: '编译者名称'
         required: false
-        default: 'djkyc'
+        default: 'GitHub Actions'
+
+  # ✅ 每 15 天自动触发（北京时间凌晨 3:00）
+  schedule:
+    - cron: '0 19 */15 * *'  # UTC+0 时间 = 北京时间 +8 小时
+
+# 🚫 不会因 push/pull_request 或脚本修改触发
+# 如果将来想启用自动触发，可取消注释以下内容：
+#   push:
+#     paths-ignore:
+#       - '.github/workflows/**'
+#       - 'openwrt/*.sh'
+#   pull_request:
+#     paths-ignore:
+#       - '.github/workflows/**'
+#       - 'openwrt/*.sh'
 
 jobs:
   build:
