@@ -2,7 +2,7 @@
 set -e
 
 echo "🧩 生成 OpenWRT .config..."
-cat <<EOF > openwrt/.config
+cat <<EOF > .config
 CONFIG_TARGET_amlogic=y
 CONFIG_TARGET_amlogic_meson8b=y
 CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
@@ -18,9 +18,12 @@ EOF
 
 echo "🧰 配置旁路由网络参数..."
 
-NETWORK_FILE="openwrt/package/base-files/files/bin/config_generate"
-sed -i 's/192\.168\.1\.1/192.168.2.2/' "$NETWORK_FILE"
+NETWORK_FILE="package/base-files/files/bin/config_generate"
 
+# 修改默认 IP
+sed -i 's/192\.168\.1\.1/192.168.2.2/' "$NETWORK_FILE" || true
+
+# 添加旁路由配置
 cat <<'NETCONFIG' >> "$NETWORK_FILE"
 # 自定义旁路由配置
 uci set network.lan.ipaddr='192.168.2.2'
@@ -34,5 +37,5 @@ NETCONFIG
 
 echo "✅ 已设置 LAN IP=192.168.2.2 网关=192.168.2.1 DHCP=关闭"
 
-cd openwrt
+# 开始编译
 make image
